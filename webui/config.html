@@ -1,0 +1,135 @@
+<div x-data="pgConfig()" x-init="init()" class="pg-config">
+<style>
+.pg-config { font-family: inherit; color: #cbd5e1; }
+.pg-config h3 { font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+                letter-spacing: .05em; margin: 16px 0 8px; }
+.pg-config h3:first-child { margin-top: 0; }
+.pg-row { display: flex; gap: 12px; margin-bottom: 10px; }
+.pg-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.pg-field label { font-size: 11px; color: #94a3b8; }
+.pg-field input { background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+                  color: #e2e8f0; padding: 6px 10px; font-size: 13px; width: 100%; }
+.pg-field input:focus { outline: none; border-color: #38bdf8; }
+.pg-actions { display: flex; gap: 8px; margin-top: 14px; }
+.pg-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+          cursor: pointer; border: none; }
+.pg-btn-primary { background: #0284c7; color: #fff; }
+.pg-btn-primary:hover { background: #0369a1; }
+.pg-btn-ghost { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+.pg-btn-ghost:hover { border-color: #64748b; color: #e2e8f0; }
+.pg-status { margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 12px; }
+.pg-status.ok  { background: #14532d20; color: #4ade80; border: 1px solid #14532d; }
+.pg-status.err { background: #7f1d1d20; color: #f87171; border: 1px solid #7f1d1d; }
+.pg-hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+</style>
+
+<h3>Connection</h3>
+
+<div class="pg-row">
+  <div class="pg-field" style="flex:2">
+    <label>Host</label>
+    <input type="text" x-model="config.pg_host" placeholder="localhost" />
+  </div>
+  <div class="pg-field" style="flex:1">
+    <label>Port</label>
+    <input type="number" x-model.number="config.pg_port" placeholder="5432" />
+  </div>
+</div>
+
+<div class="pg-row">
+  <div class="pg-field">
+    <label>Database</label>
+    <input type="text" x-model="config.pg_database" placeholder="agent_zero" />
+  </div>
+  <div class="pg-field">
+    <label>User</label>
+    <input type="text" x-model="config.pg_user" placeholder="postgres" />
+  </div>
+</div>
+
+<div class="pg-field" style="margin-bottom:10px">
+  <label>Password</label>
+  <input type="password" x-model="config.pg_password" placeholder="(stored in settings)" />
+  <div class="pg-hint">Stored encrypted in plugin settings, not in plain text.</div>
+</div>
+
+<h3>Pool</h3>
+<div class="pg-row">
+  <div class="pg-field">
+    <label>Min connections</label>
+    <input type="number" x-model.number="config.pg_min_pool" min="1" max="10" />
+  </div>
+  <div class="pg-field">
+    <label>Max connections</label>
+    <input type="number" x-model.number="config.pg_max_pool" min="1" max="50" />
+  </div>
+</div>
+
+<div class="pg-actions">
+  <button class="pg-btn pg-btn-primary" @click="testConnection" :disabled="testing">
+    <span x-text="testing ? 'Testing…' : 'Test Connection'"></span>
+  </button>
+  <button class="pg-btn pg-btn-ghost" @click="resetPool">Reset Pool</button>
+</div>
+
+<div class="pg-status ok" x-show="status === 'ok'" x-text="statusMsg"></div>
+<div class="pg-status err" x-show="status === 'err'" x-text="statusMsg"></div>
+
+<script>
+function pgConfig() {
+  return {
+    testing: false,
+    status: null,
+    statusMsg: '',
+
+    init() {
+      // config is injected by v1.7 settings system
+    },
+
+    async testConnection() {
+      this.testing = true;
+      this.status = null;
+      try {
+        const res = await fetch('/api/plugins/a0_postgresql/pg_execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            action: 'ping',
+            pg_host: this.config.pg_host,
+            pg_port: this.config.pg_port,
+            pg_user: this.config.pg_user,
+            pg_password: this.config.pg_password,
+            pg_database: this.config.pg_database,
+          }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          this.status = 'ok';
+          this.statusMsg = `Connected to ${this.config.pg_host}:${this.config.pg_port}/${this.config.pg_database}`;
+        } else {
+          this.status = 'err';
+          this.statusMsg = data.error || 'Connection failed';
+        }
+      } catch (e) {
+        this.status = 'err';
+        this.statusMsg = 'Request failed: ' + e.message;
+      } finally {
+        this.testing = false;
+      }
+    },
+
+    async resetPool() {
+      await fetch('/api/plugins/a0_postgresql/pg_execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ action: 'ping', pg_host: '' }),
+      });
+      this.status = 'ok';
+      this.statusMsg = 'Pool reset. Next query will reconnect.';
+    },
+  };
+}
+</script>
+</div>

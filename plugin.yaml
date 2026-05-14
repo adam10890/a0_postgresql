@@ -1,0 +1,7 @@
+name: a0_postgresql
+description: "PostgreSQL + pgvector integration. Provides pg_query tool for agents, asyncpg pool helper, and a settings panel for connection config. Requires pgvector/pgvector Docker image."
+version: 0.2.0
+author: "frantz"
+always_enabled: false
+settings_sections:
+  - external
