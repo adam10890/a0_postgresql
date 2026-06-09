@@ -1,59 +1,45 @@
-# AGENTS.md — a0_postgresql
+# DOX contract - a0_postgresql
 
-**Version:** 0.2.0 | **Target:** Agent Zero v1.15–v1.17
+## Purpose
 
-## What this plugin does
+PostgreSQL + pgvector integration plugin for Agent Zero. It provides the
+`pg_query` tool, connection/pool helpers, API endpoints, and a settings panel
+for database configuration.
 
-PostgreSQL + pgvector integration for Agent Zero. Exposes a `pg_query` tool for SQL queries, a REST endpoint for UI-level queries, and a settings panel for connection config. Requires the `pgvector/pgvector` Docker image (or any PostgreSQL with pgvector).
+## Ownership
 
-## Key files
+- This folder is plugin source, not database storage.
+- Connection credentials and runtime database data must stay outside source.
+- The plugin may depend on a PostgreSQL/pgvector service, but must not silently
+  create or destroy user databases.
 
-| Path | Role |
-|---|---|
-| `plugin.yaml` | Manifest — section: `external`, `title: "PostgreSQL"` |
-| `tools/pg_query.py` | `PgQuery(Tool)` — SELECT, DML/DDL, `list_tables`, `describe:<table>` |
-| `api/pg_execute.py` | REST endpoint for direct query execution |
-| `helpers/postgres_client.py` | asyncpg pool singleton (`get_client()`) |
-| `webui/` | Settings panel (host/port/credentials) |
-| `prompts/` | Agent tool guidance |
+## Local Contracts
 
-## Tool: `pg_query`
+- `plugin.yaml:name` must stay `a0_postgresql`.
+- Tool code must use shared connection helpers rather than opening ad hoc
+  connections in multiple places.
+- SQL execution must keep the configured safety policy explicit in the tool
+  response. Do not hide failed queries or connection failures.
+- Web/API surfaces should stay thin wrappers over helper logic.
 
-Import: `from helpers.tool import Tool, Response`
-Client: `from usr.plugins.a0_postgresql.helpers.postgres_client import get_client`
+## Work Guidance
 
-| Query form | Trigger | Returns |
-|---|---|---|
-| `SELECT …` / `WITH …` / `SHOW …` / `EXPLAIN …` | Starts with keyword | Rows as formatted table |
-| `list_tables` | Exact string | Public schema table names |
-| `describe:<table>` | Prefix | Column definitions |
-| DML/DDL | All other SQL | Execution status string |
+- Read `README.md` before changing install, Docker, or configuration behavior.
+- Keep pgvector-specific behavior separate from generic SQL query behavior.
+- Do not put secrets, DSNs, or local database dumps in this plugin directory.
 
-`max_rows` caps SELECT results (default 100, max 500).
+## Verification
 
-## Client pool pattern
+- Run `python -m py_compile` on touched Python files.
+- For UI/API changes, inspect matching webui calls and API handler names.
+- For manifest changes, verify `plugin.yaml` still declares the intended
+  settings section.
 
-```python
-from usr.plugins.a0_postgresql.helpers.postgres_client import get_client
-client = await get_client()
-rows = await client.fetch(query, *params, limit=max_rows)
-```
+## Child DOX Index
 
-Pool is created lazily on first call and reused across tool invocations.
-
-## Error handling
-
-| Exception | Meaning |
-|---|---|
-| `ConnectionError` | Pool could not connect — check settings |
-| General `Exception` | SQL error — returned as message, not raised |
-
-## How to add a query shortcut
-
-Add an `elif query.lower().startswith("my_prefix"):` block inside `PgQuery.execute()` before the main `if any(lowq.startswith(kw) ...)` check.
-
-## Constraints
-
-- Connection config lives in the `external` settings section — never hardcode credentials.
-- Pool singleton is per-process; reconnection is automatic via asyncpg.
-- `max_rows` hard cap is 500 — do not raise this without pagination.
+- `helpers/AGENTS.md` — connection pool, config, and database helper contracts.
+- `tools/AGENTS.md` — agent-facing SQL/vector tool behavior.
+- `api/AGENTS.md` — web/API endpoint wrappers.
+- `webui/AGENTS.md` — settings panel UI.
+- `prompts/AGENTS.md` — tool prompt guidance.
+- `docs/AGENTS.md` — install and operator documentation.
